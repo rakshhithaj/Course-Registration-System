@@ -10,6 +10,7 @@ exports.register = async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
+    console.log(`[Registration] Student ${student_id} attempting to register for course ${course_id}`);
 
     // 1. Check duplicate registration
     const [dup] = await conn.query(
@@ -32,8 +33,30 @@ exports.register = async (req, res) => {
       return res.status(404).json({ error: 'Course not found.' });
     }
     const course = courseRows[0];
+    course.enrolled = Number(course.enrolled);
 
-    // 3. Seat availability
+    // 3. Department & semester restriction
+    const [studentRows] = await conn.query(
+      'SELECT department, semester FROM students_master WHERE student_id = ?',
+      [student_id]
+    );
+    if (studentRows.length > 0) {
+      const student = studentRows[0];
+      if (course.department !== student.department) {
+        await conn.rollback();
+        return res.status(400).json({
+          error: `Course not available for your department. Your department: ${student.department}, Course department: ${course.department}.`,
+        });
+      }
+      if (course.semester !== student.semester) {
+        await conn.rollback();
+        return res.status(400).json({
+          error: `You can only register for courses in your semester (Semester ${student.semester}).`,
+        });
+      }
+    }
+
+    // 4. Seat availability
     if (course.enrolled >= course.capacity) {
       await conn.rollback();
 
@@ -46,7 +69,7 @@ exports.register = async (req, res) => {
       return res.status(409).json({ error: 'Course is full. No seats available.' });
     }
 
-    // 4. Prerequisite check
+    // 5. Prerequisite check
     const [prereqs] = await conn.query(
       'SELECT prerequisite_id FROM prerequisites WHERE course_id = ?',
       [course_id]
@@ -73,7 +96,7 @@ exports.register = async (req, res) => {
       }
     }
 
-    // 5. Credit limit check
+    // 6. Credit limit check
     const [creditRows] = await conn.query(
       `SELECT COALESCE(SUM(c.credits), 0) AS total_credits
        FROM registrations r
@@ -81,7 +104,8 @@ exports.register = async (req, res) => {
        WHERE r.student_id = ?`,
       [student_id]
     );
-    const currentCredits = creditRows[0].total_credits;
+    const currentCredits = Number(creditRows[0].total_credits);
+    console.log(`[Registration] Credit check: current=${currentCredits}, adding=${course.credits}, max=${MAX_CREDITS}, total=${currentCredits + course.credits}`);
     if (currentCredits + course.credits > MAX_CREDITS) {
       await conn.rollback();
       return res.status(400).json({
@@ -89,7 +113,7 @@ exports.register = async (req, res) => {
       });
     }
 
-    // 6. Schedule conflict check
+    // 7. Schedule conflict check
     const [newSchedules] = await conn.query(
       'SELECT day, start_time, end_time FROM schedules WHERE course_id = ?',
       [course_id]
@@ -121,13 +145,13 @@ exports.register = async (req, res) => {
       }
     }
 
-    // 7. All checks passed — register
+    // 8. All checks passed — register
     await conn.query(
       'INSERT INTO registrations (student_id, course_id) VALUES (?, ?)',
       [student_id, course_id]
     );
 
-    // 8. Send notification
+    // 9. Send notification
     await conn.query(
       'INSERT INTO notifications (student_id, message) VALUES (?, ?)',
       [student_id, `Successfully registered for ${course.course_code} - ${course.course_name}.`]
@@ -188,11 +212,14 @@ exports.getMyCourses = async (req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT c.id, c.course_code, c.course_name, c.credits, c.department,
-              f.faculty_name, r.registered_at
+              c.semester, f.faculty_name, r.registered_at
        FROM registrations r
        JOIN courses c ON r.course_id = c.id
+       JOIN students_master sm ON r.student_id = sm.student_id
        LEFT JOIN faculty f ON c.faculty_id = f.id
        WHERE r.student_id = ?
+         AND c.department = sm.department
+         AND c.semester = sm.semester
        ORDER BY r.registered_at DESC`,
       [student_id]
     );

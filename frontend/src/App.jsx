@@ -22,6 +22,7 @@ import AdminStudents from './pages/admin/AdminStudents';
 import AdminCourses from './pages/admin/AdminCourses';
 import AdminFaculty from './pages/admin/AdminFaculty';
 import AdminReports from './pages/admin/AdminReports';
+import AdminAudit from './pages/admin/AdminAudit';
 
 export default function App() {
   return (
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="/admin/courses" element={<ProtectedRoute role="admin"><AdminCourses /></ProtectedRoute>} />
         <Route path="/admin/faculty" element={<ProtectedRoute role="admin"><AdminFaculty /></ProtectedRoute>} />
         <Route path="/admin/reports" element={<ProtectedRoute role="admin"><AdminReports /></ProtectedRoute>} />
+        <Route path="/admin/audit" element={<ProtectedRoute role="admin"><AdminAudit /></ProtectedRoute>} />
 
         {/* 404 */}
         <Route path="*" element={

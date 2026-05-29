@@ -36,7 +36,8 @@ exports.getAll = async (req, res) => {
 
     const courses = rows.map((c) => ({
       ...c,
-      available_seats: c.capacity - c.enrolled,
+      enrolled: Number(c.enrolled),
+      available_seats: c.capacity - Number(c.enrolled),
     }));
 
     return res.json(courses);
@@ -62,6 +63,7 @@ exports.getById = async (req, res) => {
     }
 
     const course = rows[0];
+    course.enrolled = Number(course.enrolled);
     course.available_seats = course.capacity - course.enrolled;
 
     // Get prerequisites

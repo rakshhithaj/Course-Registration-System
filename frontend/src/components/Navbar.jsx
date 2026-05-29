@@ -107,6 +107,12 @@ export default function Navbar() {
                 >
                   Reports
                 </Link>
+                <Link
+                  to="/admin/audit"
+                  className="hover:bg-primary-600 px-3 py-2 rounded-md text-sm"
+                >
+                  Audit
+                </Link>
               </>
             )}
 

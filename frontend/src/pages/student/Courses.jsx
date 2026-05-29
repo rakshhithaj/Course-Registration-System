@@ -3,11 +3,13 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import { LoadingSpinner } from '../../components/UI';
 import Modal from '../../components/Modal';
+import { useAuth } from '../../context/AuthContext';
 
 export default function Courses() {
+  const { user } = useAuth();
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ department: '', semester: '', search: '' });
+  const [filters, setFilters] = useState({ department: user?.department || '', semester: user?.semester?.toString() || '', search: '' });
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [registering, setRegistering] = useState(false);
 
@@ -46,10 +48,10 @@ export default function Courses() {
     } catch (err) {
       const errData = err.response?.data;
       let msg = errData?.error || 'Registration failed.';
-      if (errData?.missing) {
-        msg += '\nMissing: ' + errData.missing.join(', ');
+      if (errData?.missing?.length) {
+        msg += '\nMissing prerequisites: ' + errData.missing.join(', ');
       }
-      toast.error(msg);
+      toast.error(msg, { duration: 5000 });
     } finally {
       setRegistering(false);
     }
@@ -112,43 +114,73 @@ export default function Courses() {
         </form>
       </div>
 
-      {/* Course Grid */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {courses.map((course) => (
-          <div
-            key={course.id}
-            className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition cursor-pointer"
-            onClick={() => setSelectedCourse(course)}
-          >
-            <div className="flex justify-between items-start mb-3">
-              <span className="bg-primary-100 text-primary-700 text-xs font-medium px-2.5 py-1 rounded">
-                {course.course_code}
-              </span>
-              <span
-                className={`text-xs font-medium px-2.5 py-1 rounded ${
-                  course.available_seats > 0
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-red-100 text-red-700'
-                }`}
-              >
-                {course.available_seats > 0
-                  ? `${course.available_seats} seats`
-                  : 'Full'}
-              </span>
-            </div>
-            <h3 className="text-lg font-semibold mb-1">{course.course_name}</h3>
-            <p className="text-sm text-gray-500 mb-3">{course.department}</p>
-            <div className="flex justify-between text-sm text-gray-600">
-              <span>{course.credits} Credits</span>
-              <span>{course.faculty_name || 'TBA'}</span>
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* Course Listings grouped by Department → Semester */}
+      {(() => {
+        // Deduplicate by course ID
+        const uniqueCourses = [...new Map(courses.map((c) => [c.id, c])).values()];
 
-      {courses.length === 0 && (
-        <p className="text-center text-gray-500 py-12">No courses found.</p>
-      )}
+        // Group by department then semester
+        const grouped = {};
+        uniqueCourses.forEach((course) => {
+          const dept = course.department;
+          const sem = course.semester;
+          if (!grouped[dept]) grouped[dept] = {};
+          if (!grouped[dept][sem]) grouped[dept][sem] = [];
+          grouped[dept][sem].push(course);
+        });
+
+        const departments = Object.keys(grouped).sort();
+        if (departments.length === 0) {
+          return <p className="text-center text-gray-500 py-12">No courses found.</p>;
+        }
+
+        return departments.map((dept) => (
+          <div key={dept} className="mb-8">
+            <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">{dept}</h2>
+            {Object.keys(grouped[dept])
+              .sort((a, b) => a - b)
+              .map((sem) => (
+                <div key={`${dept}-${sem}`} className="mb-6">
+                  <h3 className="text-md font-semibold text-gray-600 mb-3 ml-2">
+                    Semester {sem}
+                  </h3>
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 ml-4">
+                    {grouped[dept][sem].map((course) => (
+                      <div
+                        key={course.id}
+                        className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition cursor-pointer"
+                        onClick={() => setSelectedCourse(course)}
+                      >
+                        <div className="flex justify-between items-start mb-3">
+                          <span className="bg-primary-100 text-primary-700 text-xs font-medium px-2.5 py-1 rounded">
+                            {course.course_code}
+                          </span>
+                          <span
+                            className={`text-xs font-medium px-2.5 py-1 rounded ${
+                              course.available_seats > 0
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-red-100 text-red-700'
+                            }`}
+                          >
+                            {course.available_seats > 0
+                              ? `${course.available_seats} seats`
+                              : 'Full'}
+                          </span>
+                        </div>
+                        <h3 className="text-lg font-semibold mb-1">{course.course_name}</h3>
+                        <p className="text-sm text-gray-500 mb-3">{course.department}</p>
+                        <div className="flex justify-between text-sm text-gray-600">
+                          <span>{course.credits} Credits</span>
+                          <span>{course.faculty_name || 'TBA'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+          </div>
+        ));
+      })()}
 
       {/* Course Detail Modal */}
       <Modal

@@ -11,10 +11,17 @@ exports.studentReport = async (_req, res) => {
        FROM students_master sm
        LEFT JOIN registrations r ON sm.student_id = r.student_id
        LEFT JOIN courses c ON r.course_id = c.id
+              AND c.department = sm.department
+              AND c.semester = sm.semester
        GROUP BY sm.student_id, sm.name, sm.department, sm.semester
        ORDER BY sm.student_id`
     );
-    return res.json(rows);
+    const parsed = rows.map((r) => ({
+      ...r,
+      course_count: Number(r.course_count),
+      total_credits: Number(r.total_credits),
+    }));
+    return res.json(parsed);
   } catch (err) {
     console.error('Student report error:', err);
     return res.status(500).json({ error: 'Failed to generate report.' });
@@ -36,7 +43,12 @@ exports.courseReport = async (_req, res) => {
                 c.credits, c.capacity, f.faculty_name
        ORDER BY c.course_code`
     );
-    return res.json(rows);
+    const parsed = rows.map((r) => ({
+      ...r,
+      enrolled: Number(r.enrolled),
+      available_seats: Number(r.available_seats),
+    }));
+    return res.json(parsed);
   } catch (err) {
     console.error('Course report error:', err);
     return res.status(500).json({ error: 'Failed to generate report.' });
@@ -58,7 +70,13 @@ exports.departmentReport = async (_req, res) => {
        GROUP BY d.department
        ORDER BY d.department`
     );
-    return res.json(rows);
+    const parsed = rows.map((r) => ({
+      ...r,
+      total_students: Number(r.total_students),
+      total_courses: Number(r.total_courses),
+      total_registrations: Number(r.total_registrations),
+    }));
+    return res.json(parsed);
   } catch (err) {
     console.error('Department report error:', err);
     return res.status(500).json({ error: 'Failed to generate report.' });
